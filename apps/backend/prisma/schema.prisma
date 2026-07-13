@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Interview {
+  id                 String           @id @default(uuid())
+  status             InterviewStatus
+  score              Int              @default(0)
+  feedback           String?          @db.Text
+  
+  // Config parameters
+  role               String
+  company            String?
+  experienceLevel    String
+  duration           Int              // In minutes
+  jobDescription     String?          @db.Text
+  difficulty         String           @default("Adaptive") // Easy, Medium, Hard, Adaptive
+  language           String           @default("English")  // English, Hindi, Hinglish
+  interviewType      String           @default("Technical Interview") // HR, Tech, DSA, etc.
+  liveMetrics        Json?            // Store live score dimensions
+  hireReport         Json?            // Recruiter report
+  
+  // Profile reference
+  candidateProfileId String
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+  
+  // Structured Q&A segment evaluations
+  questions          Question[]
+  
+  // Raw messages for transcript
+  conversations      Message[]
+  
+  // Coding challenge submissions
+  codingSubmissions  CodingSubmission[]
+  
+  // Study plan roadmap
+  studyPlan          StudyPlan?
+  
+  createdAt          DateTime         @default(now())
+}
+
+model CandidateProfile {
+  id                String          @id @default(uuid())
+  githubUrl         String?
+  githubData        Json?
+  
+  summary           String          @db.Text // Natural language profile summary
+  profileJson       Json            // Candidate Knowledge Graph (skills, experience, strengths, weaknesses)
+  
+  interviews        Interview[]
+  createdAt         DateTime        @default(now())
+}
+
+model Question {
+  id                String          @id @default(uuid())
+  interviewId       String
+  interview         Interview       @relation(fields: [interviewId], references: [id])
+  
+  topic             String
+  questionText      String          @db.Text
+  answerText        String?         @db.Text
+  score             Int?            // Score out of 10
+  feedback          String?         @db.Text
+  difficulty        String?         // Easy, Medium, Hard
+  createdAt         DateTime        @default(now())
+}
+
+model Message {
+  id              String            @id @default(uuid())
+  message         String            @db.Text
+  type            MessageType
+  interviewId     String
+  interview       Interview         @relation(fields: [interviewId], references: [id])
+  createdAt       DateTime          @default(now())
+}
+
+model ResumeAnalysis {
+  id               String   @id @default(uuid())
+  atsScore         Int
+  candidateName    String?
+  email            String?
+  skills           String[]
+  strengths        String[]
+  improvements     String[]
+  formattingTips   String[]
+  rawAnalysisText  String   @db.Text
+  createdAt        DateTime @default(now())
+}
+
+model JDMatch {
+  id              String   @id @default(uuid())
+  matchPercentage Int
+  matchingSkills  String[]
+  missingSkills   String[]
+  fitAnalysis     String   @db.Text
+  jdText          String   @db.Text
+  createdAt       DateTime @default(now())
+}
+
+model CodingChallenge {
+  id             String             @id @default(uuid())
+  title          String
+  description    String             @db.Text
+  starterCode    String             @db.Text
+  language       String             @default("javascript")
+  testCases      Json               // Array of { input, output }
+  difficulty     String
+  submissions    CodingSubmission[]
+}
+
+model CodingSubmission {
+  id                String          @id @default(uuid())
+  interviewId       String
+  interview         Interview       @relation(fields: [interviewId], references: [id])
+  challengeId       String
+  challenge         CodingChallenge @relation(fields: [challengeId], references: [id])
+  submittedCode     String          @db.Text
+  status            String          // "Success" or "Failed"
+  timeComplexity    String?
+  spaceComplexity   String?
+  feedback          String?         @db.Text
+  score             Int?
+  createdAt         DateTime        @default(now())
+}
+
+model StudyPlan {
+  id               String   @id @default(uuid())
+  interviewId      String   @unique
+  interview        Interview @relation(fields: [interviewId], references: [id])
+  weaknesses       String[]
+  dayByDayPlan     Json     // Array of { day, topic, tasks }
+  createdAt        DateTime @default(now())
+}
+
+enum MessageType {
+  User
+  Assistant
+}
+
+enum InterviewStatus {
+  Pre
+  InProgress
+  Done
+}
