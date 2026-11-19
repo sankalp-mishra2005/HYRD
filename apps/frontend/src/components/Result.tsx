@@ -3,588 +3,444 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
-    Loader2,
-    Sparkles,
-    CheckCircle2,
-    HelpCircle,
-    ArrowLeft,
-    AlertTriangle,
-    ShieldCheck,
-    Terminal,
-    ChevronRight,
-    Award,
-    BookOpen,
-    Clock
+  Loader2,
+  ArrowRight,
+  FileText,
+  RotateCcw,
+  CheckCircle2,
+  AlertTriangle,
+  Award,
+  Terminal,
+  Activity,
+  Sparkles,
+  HelpCircle,
+  MessageSquare,
+  Quote
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
-import type { SuspiciousEvent } from "./Interview";
-import { toast } from "sonner";
 
 interface QuestionData {
-    id: string;
-    topic: string;
-    questionText: string;
-    answerText: string | null;
-    score: number | null;
-    feedback: string | null;
-    difficulty: string | null;
+  id: string;
+  topic: string;
+  questionText: string;
+  answerText: string | null;
+  score: number | null;
+  feedback: string | null;
+  difficulty: string | null;
 }
 
 interface MessageData {
-    id: string;
-    message: string;
-    type: "User" | "Assistant";
-    createdAt: string;
-}
-
-interface CodingSubmissionData {
-    id: string;
-    submittedCode: string;
-    status: string;
-    timeComplexity: string | null;
-    spaceComplexity: string | null;
-    feedback: string | null;
-    score: number | null;
-    challenge: {
-        title: string;
-        description: string;
-    };
+  id: string;
+  message: string;
+  type: "User" | "Assistant";
+  createdAt: string;
 }
 
 interface ResultData {
-    score: number;
-    feedback: string;
-    questions: QuestionData[];
-    status: "Done" | "InProgress" | "Pre";
-    difficulty?: string;
-    language?: string;
-    interviewType?: string;
-    liveMetrics?: {
-        communication?: number;
-        technical?: number;
-        confidence?: number;
-        problemSolving?: number;
-        systemDesign?: number;
-    };
-    hireReport?: {
-        decision?: "YES" | "NO";
-        confidence?: number;
-        strengths?: string[];
-        weaknesses?: string[];
-        recommendation?: string;
-    };
-    conversations: MessageData[];
-    codingSubmissions?: CodingSubmissionData[];
+  role?: string;
+  company?: string;
+  score: number;
+  feedback: string;
+  questions: QuestionData[];
+  status: "Done" | "InProgress" | "Pre";
+  difficulty?: string;
+  language?: string;
+  interviewType?: string;
+  liveMetrics?: {
+    communication?: number;
+    technical?: number;
+    confidence?: number;
+    problemSolving?: number;
+    systemDesign?: number;
+  };
+  hireReport?: {
+    decision?: "YES" | "NO";
+    confidence?: number;
+    strengths?: string[];
+    weaknesses?: string[];
+    recommendation?: string;
+  };
+  conversations: MessageData[];
 }
 
 export function Result() {
-    const { interviewId } = useParams();
-    const navigate = useNavigate();
-    const [result, setResult] = useState<ResultData>({
-        score: 0,
-        feedback: "",
-        questions: [],
-        status: "Pre",
-        conversations: []
-    });
-    const [suspiciousEvents, setSuspiciousEvents] = useState<SuspiciousEvent[]>([]);
+  const { interviewId } = useParams();
+  const navigate = useNavigate();
+  const [result, setResult] = useState<ResultData>({
+    score: 0,
+    feedback: "",
+    questions: [],
+    status: "Pre",
+    conversations: []
+  });
 
-    // Study Plan Roadmap States
-    const [roadmapLoading, setRoadmapLoading] = useState(false);
-    const [roadmapResult, setRoadmapResult] = useState<any>(null);
+  // Fetch & poll results safely without redundant duplicate evaluations
+  useEffect(() => {
+    let triggered = false;
 
-    useEffect(() => {
-        const raw = sessionStorage.getItem(`suspicious_events_${interviewId}`);
-        if (raw) {
-            try { setSuspiciousEvents(JSON.parse(raw)); } catch (_) {}
-        }
-    }, [interviewId]);
-
-    // Fetch study plan if it was previously generated
-    useEffect(() => {
-        if (!interviewId) return;
-        axios.get(`${BACKEND_URL}/api/v1/study-plan/${interviewId}`)
-            .then((res) => setRoadmapResult(res.data))
-            .catch(() => {}); // silent if not generated yet
-    }, [interviewId]);
-
-    useEffect(() => {
-        const fetchResult = () =>
-            axios.get(`${BACKEND_URL}/api/v1/result/${interviewId}`).then((response) => {
-                setResult(response.data);
-                return response.data.status as ResultData["status"];
-            });
-
-        fetchResult();
-        const intervalId = setInterval(async () => {
-            const s = await fetchResult();
-            if (s === "Done") clearInterval(intervalId);
-        }, 3000);
-
-        return () => clearInterval(intervalId);
-    }, [interviewId]);
-
-    // Generate study plan handler
-    async function onGenerateRoadmap() {
-        setRoadmapLoading(true);
-        try {
-            const res = await axios.post(`${BACKEND_URL}/api/v1/study-plan/generate`, {
-                interviewId,
-            });
-            setRoadmapResult(res.data);
-            toast.success("Study roadmap generated!");
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setRoadmapLoading(false);
-        }
-    }
-
-    const ready = result.status === "Done";
-
-    const getDifficultyColor = (diff: string | null) => {
-        if (!diff) return "bg-slate-800 text-slate-400";
-        const d = diff.toLowerCase();
-        if (d.includes("easy")) return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-        if (d.includes("hard")) return "bg-rose-500/10 text-rose-455 border-rose-500/20";
-        return "bg-amber-500/10 text-amber-450 border-amber-500/20";
+    const fetchResult = async () => {
+      try {
+        const query = !triggered ? "?evaluate=true" : "";
+        triggered = true;
+        const response = await axios.get(`${BACKEND_URL}/api/v1/interviews/result/${interviewId}${query}`, { withCredentials: true });
+        setResult(response.data);
+        return response.data.status as ResultData["status"];
+      } catch (err) {
+        console.warn("Notice: result fetch:", err);
+      }
     };
 
-    const getScoreColor = (score: number | null) => {
-        if (score === null) return "text-slate-450";
-        if (score >= 8) return "text-emerald-400";
-        if (score >= 5) return "text-amber-450";
-        return "text-rose-455";
-    };
+    fetchResult();
+    const intervalId = setInterval(async () => {
+      const s = await fetchResult();
+      if (s === "Done") clearInterval(intervalId);
+    }, 3000);
 
-    return (
-        <main className="min-h-screen w-screen bg-slate-950 text-slate-50 py-12 px-4 sm:px-6 overflow-y-auto">
-            <div className="mx-auto w-full max-w-5xl">
+    return () => clearInterval(intervalId);
+  }, [interviewId]);
+
+  const ready = result.status === "Done";
+  const roleTitle = result.role || "Software Engineer";
+
+  const liveMetrics = result.liveMetrics || {
+    communication: 8,
+    technical: 8,
+    confidence: 8,
+    problemSolving: 8,
+    systemDesign: 8
+  };
+
+  const hireReport = result.hireReport || {
+    decision: (result.score >= 70 ? "YES" : "NO") as "YES" | "NO",
+    confidence: 85,
+    strengths: [],
+    weaknesses: [],
+    recommendation: result.feedback || "Evaluation processing..."
+  };
+
+  return (
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-12 font-sans">
+      
+      {/* ─── HEADER BAR ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold text-white tracking-tight">Interview Evaluation Report</h1>
+            <span className={ready ? "render-status-live" : "render-status-deploying"}>
+              {ready ? "✓ Evaluation Complete" : "● Analyzing Responses..."}
+            </span>
+          </div>
+          <p className="text-xs text-zinc-400">
+            Performance diagnostics and recruiter synthesis for <span className="text-white font-medium">{roleTitle}</span> {result.company && `at ${result.company}`}.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => navigate("/workspace/interviews")}
+            variant="outline"
+            className="h-8 text-xs font-medium border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 rounded px-3 flex items-center gap-1.5 cursor-pointer"
+          >
+            <RotateCcw className="size-3.5" />
+            <span>Practice Again</span>
+          </Button>
+
+          <Button
+            onClick={() => navigate("/workspace/ats")}
+            className="h-8 bg-white hover:bg-zinc-200 text-black text-xs font-semibold rounded px-3.5 flex items-center gap-1.5 cursor-pointer transition-colors"
+          >
+            <FileText className="size-3.5" />
+            <span>Check Resume ATS</span>
+            <ArrowRight className="size-3" />
+          </Button>
+        </div>
+      </div>
+
+      {!ready ? (
+        /* Evaluation In-Progress State */
+        <div className="render-card p-16 text-center space-y-4">
+          <div className="size-8 mx-auto border-2 border-white/20 border-t-white rounded-full animate-spin" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-white">Synthesizing Recruiter Rubric</h3>
+            <p className="text-xs text-zinc-400 max-w-md mx-auto">
+              Analyzing conversational turns, answer structure, technical depth, and communication delivery.
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* Complete Render Developer Report */
+        <div className="space-y-6">
+          
+          {/* Hire Recommendation Banner */}
+          <div className="render-card p-6 bg-[#0c0c0e] border border-zinc-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <div className={`size-10 rounded flex items-center justify-center font-bold text-lg font-mono ${
+                  hireReport.decision === "YES" 
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30" 
+                    : "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                }`}>
+                  {hireReport.decision === "YES" ? "✓" : "!"}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-white tracking-tight">
+                      {hireReport.decision === "YES" ? "Candidate Recommendation: Hire" : "Candidate Recommendation: Needs Improvement"}
+                    </h2>
+                    <span className="render-status-live">
+                      Confidence: {hireReport.confidence || 85}%
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Overall Interview Score: <span className="font-mono font-semibold text-white">{result.score}/100</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest block">Format</span>
+                <span className="text-xs text-zinc-300 font-mono font-medium">{result.interviewType || "Technical"}</span>
+              </div>
+            </div>
+
+            <div className="text-xs text-zinc-300 leading-relaxed font-sans bg-black p-4 rounded border border-zinc-800/80">
+              <span className="text-zinc-500 font-mono text-[11px] block mb-1 uppercase tracking-wider font-semibold">Executive Recruiter Summary</span>
+              {hireReport.recommendation || result.feedback}
+            </div>
+          </div>
+
+          {/* Grid: Performance Metrics (Left) & Strengths/Weaknesses (Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Left 5 Cols: Metric Gauges */}
+            <div className="lg:col-span-5 render-card p-6 space-y-5">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                <div className="flex items-center gap-2 text-xs font-mono font-semibold text-zinc-300 uppercase tracking-wider">
+                  <Activity className="size-3.5 text-zinc-400" />
+                  <span>Performance Diagnostics</span>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-500">scale: 0-100</span>
+              </div>
+
+              <div className="space-y-4">
                 
-                <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-900 pb-6">
-                    <div>
-                        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-                            Interview Evaluation
-                        </h1>
-                        <p className="mt-1.5 text-xs text-slate-450 font-medium">
-                            {result.interviewType || "Technical Round"} • {result.difficulty || "Adaptive"} • {result.language || "English"}
-                        </p>
-                    </div>
-                    <Button 
-                        onClick={() => navigate("/")}
-                        className="bg-slate-900 border border-slate-850 hover:bg-slate-850 text-slate-200 text-xs font-bold cursor-pointer rounded-xl h-10 px-4 shrink-0 flex items-center gap-2"
-                    >
-                        <ArrowLeft className="size-3.5" />
-                        Dashboard
-                    </Button>
-                </header>
+                {/* Technical Ability */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-400 font-medium">Technical Depth</span>
+                    <span className="text-white font-mono font-semibold">{Math.round((liveMetrics.technical || 8) * 10)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                    <div 
+                      className="h-full bg-emerald-400 rounded-full" 
+                      style={{ width: `${Math.min(100, Math.round((liveMetrics.technical || 8) * 10))}%` }} 
+                    />
+                  </div>
+                </div>
 
-                {!ready ? (
-                    <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border border-slate-850 bg-slate-900/30 py-24 text-center backdrop-blur shadow-xl">
-                        <div className="relative flex size-12 items-center justify-center">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-500/20 opacity-75" />
-                            <Loader2 className="size-6 animate-spin text-sky-400" />
+                {/* Communication */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-400 font-medium">Communication & Clarity</span>
+                    <span className="text-white font-mono font-semibold">{Math.round((liveMetrics.communication || 8) * 10)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                    <div 
+                      className="h-full bg-emerald-400 rounded-full" 
+                      style={{ width: `${Math.min(100, Math.round((liveMetrics.communication || 8) * 10))}%` }} 
+                    />
+                  </div>
+                </div>
+
+                {/* Problem Solving */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-400 font-medium">Problem Solving & Trade-offs</span>
+                    <span className="text-white font-mono font-semibold">{Math.round((liveMetrics.problemSolving || 8) * 10)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                    <div 
+                      className="h-full bg-emerald-400 rounded-full" 
+                      style={{ width: `${Math.min(100, Math.round((liveMetrics.problemSolving || 8) * 10))}%` }} 
+                    />
+                  </div>
+                </div>
+
+                {/* Confidence */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-400 font-medium">Confidence & Delivery</span>
+                    <span className="text-white font-mono font-semibold">{Math.round((liveMetrics.confidence || 8) * 10)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                    <div 
+                      className="h-full bg-emerald-400 rounded-full" 
+                      style={{ width: `${Math.min(100, Math.round((liveMetrics.confidence || 8) * 10))}%` }} 
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="p-3 bg-black rounded border border-zinc-800 text-[11px] text-zinc-400 leading-relaxed font-sans">
+                💡 Response pacing and structured STAR breakdowns significantly influence the technical score.
+              </div>
+            </div>
+
+            {/* Right 7 Cols: Recruiter Synthesis & Strengths */}
+            <div className="lg:col-span-7 space-y-6">
+              
+              <div className="render-card p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
+                  <div className="flex items-center gap-2 text-xs font-mono font-semibold text-zinc-300 uppercase tracking-wider">
+                    <Award className="size-3.5 text-zinc-400" />
+                    <span>Candidate Strengths & Gaps</span>
+                  </div>
+                </div>
+
+                {/* Identified Strengths */}
+                <div className="space-y-2">
+                  <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5 font-mono">
+                    <CheckCircle2 className="size-3.5 text-emerald-400" />
+                    Observed Strengths
+                  </span>
+                  {(hireReport.strengths && hireReport.strengths.length > 0) ? (
+                    <div className="space-y-1.5">
+                      {hireReport.strengths.map((str, i) => (
+                        <div key={i} className="text-xs text-zinc-300 bg-black p-2.5 rounded border border-zinc-800/80 flex items-start gap-2">
+                          <span className="text-emerald-400 font-mono text-[11px] mt-0.5">✓</span>
+                          <span>{str}</span>
                         </div>
-                        <div className="space-y-1">
-                            <p className="font-bold text-slate-200 text-sm">Formulating Recruiter Report…</p>
-                            <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                                Gemini is analyzing emotional intelligence, dialog turns, and coding submission metrics.
-                            </p>
-                        </div>
+                      ))}
                     </div>
-                ) : (
-                    <div className="space-y-8 animate-in fade-in duration-500">
-                        {/* Overall Layout: Split columns */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            
-                            {/* Column 1: AI Recruiter decision and metrics */}
-                            <div className="space-y-6">
-                                {/* Recruiter Decision Card */}
-                                {result.hireReport && (
-                                    <Card className={`border overflow-hidden bg-slate-900/60 backdrop-blur shadow-2xl ${
-                                        result.hireReport.decision === "YES" ? "border-emerald-800/40" : "border-rose-900/40"
-                                    }`}>
-                                        <div className={`px-5 py-3 border-b flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
-                                            result.hireReport.decision === "YES" ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-400" : "bg-rose-955/20 border-rose-900/30 text-rose-455"
-                                        }`}>
-                                            <span>Hire Recommendation</span>
-                                            <span>Conf: {result.hireReport.confidence}%</span>
-                                        </div>
-                                        <CardContent className="p-5 space-y-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`text-4xl font-black px-5 py-2.5 rounded-xl border tracking-wider shadow-inner ${
-                                                    result.hireReport.decision === "YES" ? "bg-emerald-950/30 border-emerald-800/50 text-emerald-400" : "bg-rose-955/30 border-rose-800/50 text-rose-455"
-                                                }`}>
-                                                    {result.hireReport.decision}
-                                                </div>
-                                                <div className="space-y-0.5">
-                                                    <h3 className="text-xs font-bold text-slate-300">Recruiter Decision</h3>
-                                                    <p className="text-[10px] text-slate-550">Based on dynamic dialogue analytics</p>
-                                                </div>
-                                            </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500 italic">No specific strengths recorded.</p>
+                  )}
+                </div>
 
-                                            <p className="text-xs text-slate-400 leading-relaxed font-sans border-l-2 border-slate-800 pl-3">
-                                                {result.hireReport.recommendation}
-                                            </p>
-
-                                            {/* Strengths */}
-                                            {result.hireReport.strengths && result.hireReport.strengths.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Key Strengths</h4>
-                                                    <ul className="space-y-1">
-                                                        {result.hireReport.strengths.map((str, i) => (
-                                                            <li key={i} className="text-xs text-slate-300 flex items-start gap-1">
-                                                                <span className="text-emerald-500 shrink-0">•</span>
-                                                                <span>{str}</span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-
-                                            {/* Weaknesses */}
-                                            {result.hireReport.weaknesses && result.hireReport.weaknesses.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Key Weaknesses</h4>
-                                                    <ul className="space-y-1">
-                                                        {result.hireReport.weaknesses.map((weak, i) => (
-                                                            <li key={i} className="text-xs text-slate-305 flex items-start gap-1">
-                                                                <span className="text-rose-500 shrink-0">•</span>
-                                                                <span>{weak}</span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                )}
-
-                                {/* Score Dashboard Panel */}
-                                {result.liveMetrics && (
-                                    <Card className="bg-slate-900/60 border-slate-850/80 backdrop-blur shadow-2xl">
-                                        <CardHeader className="py-4">
-                                            <CardTitle className="text-xs font-bold uppercase tracking-widest text-slate-450 flex items-center gap-1.5">
-                                                <Sparkles className="size-3 text-sky-400" />
-                                                Prep Metrics Profile
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="space-y-3.5 pb-5">
-                                            {[
-                                                { label: "Communication", key: "communication", color: "bg-violet-500" },
-                                                { label: "Technical Skill", key: "technical", color: "bg-sky-500" },
-                                                { label: "Confidence", key: "confidence", color: "bg-amber-500" },
-                                                { label: "Problem Solving", key: "problemSolving", color: "bg-emerald-500" },
-                                                { label: "System Design", key: "systemDesign", color: "bg-rose-500" },
-                                            ].map((item) => {
-                                                const val = (result.liveMetrics as any)[item.key] || 5;
-                                                return (
-                                                    <div key={item.key} className="space-y-1">
-                                                        <div className="flex items-center justify-between text-[11px] font-medium">
-                                                            <span className="text-slate-450">{item.label}</span>
-                                                            <span className="text-slate-205 font-bold">{val} / 10</span>
-                                                        </div>
-                                                        <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-850">
-                                                            <div
-                                                                className={`h-full ${item.color} rounded-full transition-all duration-500`}
-                                                                style={{ width: `${val * 10}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </CardContent>
-                                    </Card>
-                                )}
-                            </div>
-
-                            {/* Column 2: Question breakdown, Coding, and Roadmap */}
-                            <div className="lg:col-span-2 space-y-6">
-                                {/* Overall Summary Card */}
-                                <Card className="bg-slate-900/60 border-slate-850/80 backdrop-blur shadow-2xl overflow-hidden relative">
-                                    <div className="absolute top-0 right-0 p-4 opacity-15">
-                                        <Sparkles className="size-36 text-sky-450" />
-                                    </div>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-450 flex items-center gap-1.5">
-                                            <Sparkles className="size-4 text-sky-400" />
-                                            Executive Evaluation
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="flex flex-col sm:flex-row items-start gap-6">
-                                        <div className="flex flex-col items-center justify-center border border-slate-800 bg-slate-950/60 w-28 h-28 rounded-xl shrink-0 shadow-inner">
-                                            <span className="text-[9px] font-bold tracking-wider text-slate-500 uppercase">Avg Score</span>
-                                            <span className="text-3xl font-black text-sky-400 mt-1">
-                                                {result.score}
-                                            </span>
-                                            <span className="text-[9px] font-semibold text-slate-500">out of 10</span>
-                                        </div>
-
-                                        <div className="space-y-2 flex-1">
-                                            <div className="text-xs font-bold text-slate-300">Executive Summary:</div>
-                                            <p className="text-slate-400 text-xs leading-relaxed whitespace-pre-wrap">
-                                                {result.feedback}
-                                            </p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Coding Round Submissions (if any) */}
-                                {result.codingSubmissions && result.codingSubmissions.length > 0 && (
-                                    <section className="space-y-4">
-                                        <h2 className="text-xs font-bold tracking-widest uppercase text-slate-450 flex items-center gap-2">
-                                            <Terminal className="size-4 text-sky-400" />
-                                            Coding Assessment Submissions
-                                        </h2>
-
-                                        {result.codingSubmissions.map((sub) => (
-                                            <Card key={sub.id} className="bg-slate-900/60 border-slate-850 shadow-xl overflow-hidden">
-                                                <div className="px-5 py-3 border-b border-slate-900 bg-slate-900/10 flex items-center justify-between flex-wrap gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-bold text-slate-200">{sub.challenge.title}</span>
-                                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                                                            sub.status === "Success" ? "bg-emerald-500/10 text-emerald-450 border-emerald-500/20" : "bg-rose-500/10 text-rose-455 border-rose-500/20"
-                                                        }`}>
-                                                            {sub.status}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-[11px] text-slate-400 font-mono">
-                                                        Score: <span className="text-sky-400 font-bold">{sub.score} / 10</span>
-                                                    </div>
-                                                </div>
-                                                <CardContent className="p-5 space-y-4">
-                                                    {/* Code block */}
-                                                    <div className="rounded-xl border border-slate-850/80 bg-slate-950 p-4 font-mono text-xs text-slate-300 overflow-x-auto max-h-56">
-                                                        <pre>{sub.submittedCode}</pre>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="p-3 rounded-lg bg-slate-955/40 border border-slate-900 text-xs">
-                                                            <div className="text-[10px] text-slate-500 font-semibold mb-1">Estimated Time Complexity</div>
-                                                            <div className="font-mono text-slate-205 font-semibold">{sub.timeComplexity || "O(N)"}</div>
-                                                        </div>
-                                                        <div className="p-3 rounded-lg bg-slate-955/40 border border-slate-900 text-xs">
-                                                            <div className="text-[10px] text-slate-500 font-semibold mb-1">Estimated Space Complexity</div>
-                                                            <div className="font-mono text-slate-205 font-semibold">{sub.spaceComplexity || "O(1)"}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    {sub.feedback && (
-                                                        <div className="p-4 rounded-xl bg-sky-955/5 border border-sky-900/10 space-y-1">
-                                                            <h4 className="text-[10px] font-bold uppercase tracking-widest text-sky-400">Gemini Observer Feedback</h4>
-                                                            <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{sub.feedback}</p>
-                                                        </div>
-                                                    )}
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </section>
-                                )}
-
-                                {/* Q&A Breakdown */}
-                                <section className="space-y-4">
-                                    <h2 className="text-xs font-bold tracking-widest uppercase text-slate-450 flex items-center gap-2">
-                                        <CheckCircle2 className="size-4 text-sky-400" />
-                                        Dialogue Segment Analytics
-                                    </h2>
-
-                                    {result.questions.map((q, idx) => (
-                                        <Card key={q.id} className="bg-slate-900/60 border-slate-850 hover:border-slate-800 transition-all duration-200">
-                                            <CardHeader className="py-3 px-5 border-b border-slate-900 bg-slate-900/10 flex flex-row items-center justify-between gap-4 flex-wrap">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="inline-flex size-6 items-center justify-center rounded-lg bg-slate-950 border border-slate-800 text-xs font-bold text-slate-400 shadow-inner">
-                                                        Q{idx + 1}
-                                                    </span>
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="text-xs font-bold text-slate-200">{q.topic}</span>
-                                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getDifficultyColor(q.difficulty)}`}>
-                                                            {q.difficulty || "Medium"}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-xs font-bold bg-slate-950/80 px-3 py-1 rounded-lg border border-slate-850">
-                                                    Score: <span className={getScoreColor(q.score)}>{q.score !== null ? `${q.score}/10` : "N/A"}</span>
-                                                </div>
-                                            </CardHeader>
-                                            <CardContent className="p-5 space-y-4 text-xs">
-                                                {/* Question */}
-                                                <div className="space-y-1">
-                                                    <div className="text-[9px] font-bold tracking-wider uppercase text-slate-500 flex items-center gap-1">
-                                                        <HelpCircle className="size-3 text-sky-450" />
-                                                        Interviewer Question
-                                                    </div>
-                                                    <p className="text-slate-200 font-medium leading-relaxed pl-4 border-l border-sky-500/25">
-                                                        {q.questionText}
-                                                    </p>
-                                                </div>
-
-                                                {/* Answer */}
-                                                <div className="space-y-1">
-                                                    <div className="text-[9px] font-bold tracking-wider uppercase text-slate-500">
-                                                        Candidate Answer
-                                                    </div>
-                                                    <p className="text-slate-400 leading-relaxed italic pl-4 border-l border-slate-800">
-                                                        {q.answerText || "No response recorded / silence."}
-                                                    </p>
-                                                </div>
-
-                                                {/* Feedback */}
-                                                {q.feedback && (
-                                                    <div className="space-y-1 pt-2 border-t border-slate-900">
-                                                        <div className="text-[9px] font-bold tracking-wider uppercase text-sky-400">
-                                                            Evaluation Notes
-                                                        </div>
-                                                        <p className="text-slate-450 leading-relaxed pl-4">
-                                                            {q.feedback}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </CardContent>
-                                        </Card>
-                                    ))}
-                                </section>
-
-                                {/* Dialogue Timeline Replay */}
-                                {result.conversations && result.conversations.length > 0 && (
-                                    <section className="space-y-4">
-                                        <h2 className="text-xs font-bold tracking-widest uppercase text-slate-450 flex items-center gap-2">
-                                            <Clock className="size-4 text-sky-400" />
-                                            Dialogue Replay Timeline
-                                        </h2>
-
-                                        <Card className="bg-slate-900/60 border-slate-850 p-6">
-                                            <div className="relative border-l-2 border-slate-800 ml-4 pl-6 space-y-6">
-                                                {result.conversations.map((msg, i) => (
-                                                    <div key={msg.id} className="relative">
-                                                        {/* Marker node */}
-                                                        <span className={`absolute -left-[31px] top-1 flex size-4 items-center justify-center rounded-full border ${
-                                                            msg.type === "Assistant" ? "bg-violet-500 border-violet-400" : "bg-sky-500 border-sky-400"
-                                                        }`}>
-                                                            <span className="size-1.5 rounded-full bg-white" />
-                                                        </span>
-                                                        <div className="space-y-1 text-xs">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-extrabold uppercase text-[9px] tracking-wider text-slate-500">
-                                                                    {msg.type === "Assistant" ? "AI Interviewer" : "Candidate"}
-                                                                </span>
-                                                                <span className="text-[9px] text-slate-600">
-                                                                    {new Date(msg.createdAt).toLocaleTimeString()}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-950/40 p-3 rounded-lg border border-slate-900 max-w-[90%]">
-                                                                {msg.message}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </Card>
-                                    </section>
-                                )}
-
-                                {/* Personalized Placement Prep Plan Widget */}
-                                <section className="space-y-4">
-                                    <h2 className="text-xs font-bold tracking-widest uppercase text-slate-450 flex items-center gap-2">
-                                        <BookOpen className="size-4 text-sky-400" />
-                                        Personal Prep Plan Generator
-                                    </h2>
-
-                                    <Card className="bg-slate-900/60 border-slate-850">
-                                        <CardContent className="p-6 space-y-4">
-                                            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                                <div className="space-y-0.5 text-center sm:text-left">
-                                                    <h3 className="text-xs font-bold text-slate-200">Personalized Prep Roadmap</h3>
-                                                    <p className="text-[10px] text-slate-450 max-w-sm">Generate a customized 3-day roadmap detailing focal topics based on interview weaknesses.</p>
-                                                </div>
-                                                <Button
-                                                    disabled={roadmapLoading}
-                                                    onClick={onGenerateRoadmap}
-                                                    className="bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold px-6 py-4 rounded-xl cursor-pointer shrink-0"
-                                                >
-                                                    {roadmapLoading ? (
-                                                        <>
-                                                            <Loader2 className="size-4 animate-spin mr-1.5" />
-                                                            Building Roadmap...
-                                                        </>
-                                                    ) : (
-                                                        <>Generate Roadmap</>
-                                                    )}
-                                                </Button>
-                                            </div>
-
-                                            {roadmapResult && (
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-900">
-                                                    {roadmapResult.dayByDayPlan?.map((plan: any, i: number) => (
-                                                        <div key={i} className="p-4 rounded-xl bg-slate-950/50 border border-slate-850 flex flex-col justify-between">
-                                                            <div>
-                                                                <h4 className="text-xs font-black text-sky-400 mb-1">{plan.day}</h4>
-                                                                <h5 className="text-[11px] font-bold text-slate-200 mb-2">{plan.topic}</h5>
-                                                                <ul className="space-y-1">
-                                                                    {plan.tasks?.map((task: string, k: number) => (
-                                                                        <li key={k} className="text-slate-450 text-[10px] leading-relaxed flex items-start gap-1">
-                                                                            <span className="text-sky-500 shrink-0">•</span>
-                                                                            <span>{task}</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </section>
-
-                                {/* Proctoring Report */}
-                                <section className="space-y-4">
-                                    <h2 className="text-xs font-bold tracking-widest uppercase text-slate-450 flex items-center gap-2">
-                                        {suspiciousEvents.length === 0
-                                            ? <ShieldCheck className="size-4 text-emerald-450 shrink-0" />
-                                            : <AlertTriangle className="size-4 text-amber-450 shrink-0" />}
-                                        Proctoring Integrity Report
-                                    </h2>
-                                    {suspiciousEvents.length === 0 ? (
-                                        <Card className="bg-emerald-950/20 border-emerald-900/30 p-5 flex items-center gap-3">
-                                            <ShieldCheck className="size-5 text-emerald-450 shrink-0" />
-                                            <p className="text-emerald-300 text-xs leading-relaxed">System proctoring confirms full compliance. No tab swaps, visibility toggles, or framing violations were detected.</p>
-                                        </Card>
-                                    ) : (
-                                        <Card className="bg-amber-950/10 border-amber-900/30 overflow-hidden">
-                                            <CardHeader className="py-2.5 px-5 border-b border-amber-900/30 bg-amber-955/20">
-                                                <CardTitle className="text-xs font-bold text-amber-300 flex items-center gap-2">
-                                                    <AlertTriangle className="size-4" />
-                                                    {suspiciousEvents.length} suspicious event{suspiciousEvents.length !== 1 ? "s" : ""} logged
-                                                </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="p-0">
-                                                <div className="divide-y divide-amber-900/20">
-                                                    {suspiciousEvents.map((ev, i) => (
-                                                        <div key={i} className="flex items-start gap-4 px-5 py-3 text-xs">
-                                                            <span className="text-[10px] text-slate-500 shrink-0 font-mono pt-0.5">
-                                                                {new Date(ev.timestamp).toLocaleTimeString()}
-                                                            </span>
-                                                            <span className="text-amber-200/80">{ev.message}</span>
-                                                            <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 shrink-0">
-                                                                {ev.type.replace(/_/g, " ")}
-                                                            </span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    )}
-                                </section>
-                            </div>
-                            
+                {/* Areas for Improvement */}
+                <div className="space-y-2 pt-2">
+                  <span className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 font-mono">
+                    <AlertTriangle className="size-3.5 text-amber-400" />
+                    Areas to Strengthen
+                  </span>
+                  {(hireReport.weaknesses && hireReport.weaknesses.length > 0) ? (
+                    <div className="space-y-1.5">
+                      {hireReport.weaknesses.map((w, i) => (
+                        <div key={i} className="text-xs text-zinc-300 bg-black p-2.5 rounded border border-zinc-800/80 flex items-start gap-2">
+                          <span className="text-amber-400 font-mono text-[11px] mt-0.5">⚠</span>
+                          <span>{w}</span>
                         </div>
+                      ))}
                     </div>
-                )}
+                  ) : (
+                    <p className="text-xs text-zinc-500 italic">No critical deficiencies identified.</p>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Next Steps CTA Box */}
+              <div className="render-card p-6 bg-[#0a0a0c] border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-white">Optimize Resume for this Role</h3>
+                  <p className="text-xs text-zinc-400">
+                    Run HYRD's ATS Intelligence engine against the job description to match keywords and eliminate blind spots.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => navigate("/workspace/ats")}
+                  className="render-btn-primary shrink-0"
+                >
+                  <span>Check ATS Score</span>
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
 
             </div>
-        </main>
-    );
-}
 
-export default Result;
+          </div>
+
+          {/* ─── PER-QUESTION BREAKDOWN & STAR ANALYSIS (INTERVIEWSBY.AI STYLE) ─── */}
+          {result.questions && result.questions.length > 0 && (
+            <div className="space-y-4 pt-4">
+              <div className="border-b border-zinc-800 pb-3">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <MessageSquare className="size-4 text-emerald-400" />
+                  <span>Question-by-Question Breakdown & STAR Feedback</span>
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Actionable notes on the answers you gave, what was clear vs. vague, and how to tighten your examples.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {result.questions.map((q, idx) => (
+                  <div key={q.id || idx} className="render-card p-6 space-y-4 bg-[#0a0a0c]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          Question {idx + 1}
+                        </span>
+                        <span className="text-xs font-mono text-zinc-400">{q.topic || "Core Technical"}</span>
+                      </div>
+                      {typeof q.score === "number" && (
+                        <div className="flex items-center gap-1.5 text-xs font-mono">
+                          <span className="text-zinc-500">Score:</span>
+                          <span className={`font-bold ${q.score >= 75 ? "text-emerald-400" : q.score >= 55 ? "text-amber-400" : "text-red-400"}`}>
+                            {q.score}/100
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-white leading-relaxed">
+                        "{q.questionText}"
+                      </h4>
+                    </div>
+
+                    {q.answerText && (
+                      <div className="p-3 bg-black rounded border border-zinc-800/80 space-y-1">
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">Your Transcribed Response</span>
+                        <p className="text-xs text-zinc-300 leading-relaxed italic">
+                          "{q.answerText}"
+                        </p>
+                      </div>
+                    )}
+
+                    {q.feedback && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                            <CheckCircle2 className="size-3.5" />
+                            <span>What was clear</span>
+                          </div>
+                          <p className="text-xs text-zinc-300 leading-relaxed">
+                            {q.feedback.split(".")[0] ? `${q.feedback.split(".")[0]}.` : "Good technical framing and direct response to the core prompt."}
+                          </p>
+                        </div>
+
+                        <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
+                            <Sparkles className="size-3.5" />
+                            <span>STAR Improvement Tip</span>
+                          </div>
+                          <p className="text-xs text-zinc-300 leading-relaxed">
+                            {q.feedback.split(".").slice(1).join(".").trim() || "Add concrete scale metrics or measurable business outcomes to substantiate your impact."}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
+    </div>
+  );
+}

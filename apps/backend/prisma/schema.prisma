@@ -10,12 +10,162 @@ datasource db {
   provider = "postgresql"
 }
 
+// --- Better Auth Schema Tables ---
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
+  onboarded     Boolean   @default(false)
+  role          String    @default("user") // "user" or "admin"
+  tier          String    @default("Free") // "Free" or "Pro"
+
+  sessions      Session[]
+  accounts      Account[]
+  profile       Profile?
+  settings      UserSettings?
+  resumes       Resume[]
+  jobDescriptions JobDescription[]
+  interviews    Interview[]
+  resumeAnalyses ResumeAnalysis[]
+  jdMatches     JDMatch[]
+  atsAnalyses   AtsAnalysis[]
+  auditLogs     AuditLog[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+// --- Workspace User Custom Meta Tables ---
+
+model Profile {
+  id              String          @id @default(uuid())
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetRole      String?
+  experienceLevel String?
+  goalCompany     String?
+  skills          String[]
+  education       String?
+  githubUrl       String?
+  linkedinUrl     String?
+  updatedAt       DateTime        @updatedAt
+
+  @@map("profile")
+}
+
+model UserSettings {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme           String   @default("system") // "dark" | "light" | "system"
+  language        String   @default("English")
+  voice           String   @default("alloy")
+  interviewLength Int      @default(30)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("user_settings")
+}
+
+model Resume {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName  String
+  fileUrl   String   @db.Text
+  atsScore  Int?
+  skills    String[]
+  lastUsed  DateTime?
+  atsAnalyses AtsAnalysis[]
+  createdAt DateTime @default(now())
+
+  @@map("resume")
+}
+
+model JobDescription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  company   String?
+  jdText    String   @db.Text
+  atsAnalyses AtsAnalysis[]
+  createdAt DateTime @default(now())
+
+  @@map("job_description")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_log")
+}
+
+// --- Core App Functionality Schema Tables ---
+
 model Interview {
   id                 String           @id @default(uuid())
   status             InterviewStatus
   score              Int              @default(0)
   feedback           String?          @db.Text
   
+  // User mapping
+  userId             String?
+  user               User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Config parameters
   role               String
   company            String?
@@ -41,10 +191,11 @@ model Interview {
   // Coding challenge submissions
   codingSubmissions  CodingSubmission[]
   
-  // Study plan roadmap
-  studyPlan          StudyPlan?
-  
   createdAt          DateTime         @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@map("interview")
 }
 
 model CandidateProfile {
@@ -57,6 +208,8 @@ model CandidateProfile {
   
   interviews        Interview[]
   createdAt         DateTime        @default(now())
+
+  @@map("candidate_profile")
 }
 
 model Question {
@@ -71,6 +224,9 @@ model Question {
   feedback          String?         @db.Text
   difficulty        String?         // Easy, Medium, Hard
   createdAt         DateTime        @default(now())
+
+  @@index([interviewId])
+  @@map("question")
 }
 
 model Message {
@@ -80,10 +236,16 @@ model Message {
   interviewId     String
   interview       Interview         @relation(fields: [interviewId], references: [id])
   createdAt       DateTime          @default(now())
+
+  @@index([interviewId])
+  @@index([interviewId, createdAt])
+  @@map("message")
 }
 
 model ResumeAnalysis {
   id               String   @id @default(uuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   atsScore         Int
   candidateName    String?
   email            String?
@@ -92,17 +254,27 @@ model ResumeAnalysis {
   improvements     String[]
   formattingTips   String[]
   rawAnalysisText  String   @db.Text
+  perspectives     Json?
   createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@map("resume_analysis")
 }
 
 model JDMatch {
   id              String   @id @default(uuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   matchPercentage Int
   matchingSkills  String[]
   missingSkills   String[]
   fitAnalysis     String   @db.Text
   jdText          String   @db.Text
+  interviewFocus  Json?
   createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@map("jd_match")
 }
 
 model CodingChallenge {
@@ -114,6 +286,8 @@ model CodingChallenge {
   testCases      Json               // Array of { input, output }
   difficulty     String
   submissions    CodingSubmission[]
+
+  @@map("coding_challenge")
 }
 
 model CodingSubmission {
@@ -129,15 +303,56 @@ model CodingSubmission {
   feedback          String?         @db.Text
   score             Int?
   createdAt         DateTime        @default(now())
+
+  @@map("coding_submission")
 }
 
-model StudyPlan {
-  id               String   @id @default(uuid())
-  interviewId      String   @unique
-  interview        Interview @relation(fields: [interviewId], references: [id])
-  weaknesses       String[]
-  dayByDayPlan     Json     // Array of { day, topic, tasks }
-  createdAt        DateTime @default(now())
+model AtsAnalysis {
+  id                   String          @id @default(uuid())
+  userId               String
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Optional relations to existing Library records
+  resumeId             String?
+  resume               Resume?         @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  jobDescriptionId     String?
+  jobDescription       JobDescription? @relation(fields: [jobDescriptionId], references: [id], onDelete: SetNull)
+
+  // Target Job Information
+  jobTitle             String?
+  company              String?
+  jdText               String          @db.Text
+
+  // Resume File & Extracted Text
+  resumeFileName       String
+  resumeText           String          @db.Text
+
+  // Parsed Resume & JD Structures
+  parsedResume         Json            // { contact, education, experience, projects, skills, certifications, sections, missingSections }
+  parsedJd             Json            // { requiredSkills, preferredSkills, tools, responsibilities, qualifications, experienceLevel, keywords }
+
+  // Overall Score (0-100) & Transparent Weighted Breakdown
+  overallScore         Int             // 0 - 100
+  scoreBreakdown       Json            // { skillsMatch: number, requiredKeywords: number, experienceRelevance: number, projectRelevance: number, educationAlignment: number, structureReadability: number }
+
+  // Keyword Matching Evidence
+  keywordMatches       Json            // { matchedExact: string[], matchedRelated: string[], missingRequired: string[], missingPreferred: string[], evidence: object }
+
+  // ATS Formatting Diagnostics
+  compatibilityChecks  Json            // { headings: object, contactVisibility: object, formatConsistency: object, dateConsistency: object, bulletQuality: object, excessiveFormatting: object, missingSections: string[], keywordStuffingWarnings: string[] }
+
+  // Actionable 4-Part Recommendations
+  recommendations      Json            // Array of { id: string, title: string, issue: string, whyItMatters: string, howToImprove: string, sectionLocation: string, priority: "High" | "Medium" | "Low" }
+
+  // Resume Improvement Proposals (STAR bullets, project rewrites, impact metrics)
+  improvements         Json?           // { bulletPoints: [...], projectDescriptions: [...], keywordIntegrations: [...], impactSuggestions: [...] }
+
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("ats_analysis")
 }
 
 enum MessageType {

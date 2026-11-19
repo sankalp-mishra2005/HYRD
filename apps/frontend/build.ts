@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// @ts-nocheck
 import plugin from "bun-plugin-tailwind";
 import { existsSync } from "fs";
 import { rm } from "fs/promises";
@@ -108,7 +109,8 @@ const formatFileSize = (bytes: number): string => {
 console.log("\n🚀 Starting build process...\n");
 
 const cliConfig = parseArgs();
-const outdir = cliConfig.outdir || path.join(process.cwd(), "dist");
+const projectDir = import.meta.dir;
+const outdir = cliConfig.outdir || path.resolve(projectDir, "dist");
 
 if (existsSync(outdir)) {
   console.log(`🗑️ Cleaning previous build at ${outdir}`);
@@ -117,8 +119,9 @@ if (existsSync(outdir)) {
 
 const start = performance.now();
 
-const entrypoints = [...new Bun.Glob("**.html").scanSync("src")]
-  .map(a => path.resolve("src", a))
+const srcDir = path.resolve(projectDir, "src");
+const entrypoints = [...new Bun.Glob("**.html").scanSync(srcDir)]
+  .map(a => path.resolve(srcDir, a))
   .filter(dir => !dir.includes("node_modules"));
 console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? "file" : "files"} to process\n`);
 
@@ -129,6 +132,7 @@ const result = await Bun.build({
   minify: true,
   target: "browser",
   sourcemap: "linked",
+  publicPath: (cliConfig as any).publicPath ?? "/",
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },

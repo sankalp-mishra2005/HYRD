@@ -14,6 +14,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@google/genai": "^2.8.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
@@ -22,10 +23,12 @@
     "@types/express": "^5.0.6",
     "@types/ws": "^8.18.1",
     "axios": "^1.16.0",
+    "better-auth": "^1.6.23",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "https-proxy-agent": "^9.0.0",
+    "mammoth": "^1.13.0",
     "multer": "^2.2.0",
     "pg": "^8.20.0",
     "playwright": "^1.60.0",
@@ -34,6 +37,10 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "scripts": {
-    "dev": "bun --hot index.ts"
+    "build": "bun x prisma generate",
+    "postinstall": "bun x prisma generate",
+    "start": "bun run index.ts",
+    "dev": "bun --hot index.ts",
+    "test": "bun test"
   }
 }

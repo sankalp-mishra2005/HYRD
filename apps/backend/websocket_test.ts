@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import "dotenv/config";
 
 const apiKey = process.env.GEMINI_API_KEY;
-console.log("Using API Key:", apiKey);
+console.log("Using API Key:", apiKey ? "[CONFIGURED]" : "[MISSING]");
 
 const geminiLiveUrl =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" +

@@ -1,41 +1,53 @@
 import { serve } from "bun";
-import index from "./index.html";
+import path from "path";
+import fs from "fs";
+
+const distDir = path.resolve(import.meta.dir, "../dist");
+const indexHtmlPath = path.join(distDir, "index.html");
 
 const server = serve({
-  routes: {
-    // Serve index.html for all unmatched routes.
-    "/*": index,
+  port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+  hostname: "0.0.0.0",
+  async fetch(req) {
+    const url = new URL(req.url);
+    const pathname = decodeURIComponent(url.pathname);
 
-    "/api/hello": {
-      async GET(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "GET",
+    // Serve static files from dist if requested and exists
+    if (pathname !== "/" && pathname !== "") {
+      const candidatePath = path.join(distDir, pathname);
+      if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
+        const file = Bun.file(candidatePath);
+        return new Response(file, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": pathname.includes("chunk-") ? "public, max-age=31536000, immutable" : "no-cache",
+          },
         });
-      },
-      async PUT(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "PUT",
-        });
-      },
-    },
+      }
+    }
 
-    "/api/hello/:name": async req => {
-      const name = req.params.name;
-      return Response.json({
-        message: `Hello, ${name}!`,
+    // SPA fallback: serve dist/index.html for all client routes
+    if (fs.existsSync(indexHtmlPath)) {
+      let html = await Bun.file(indexHtmlPath).text();
+      const backendUrl = process.env.BACKEND_URL || process.env.VITE_BACKEND_URL;
+      if (backendUrl) {
+        html = html.replace(
+          "<head>",
+          `<head><script>window.__BACKEND_URL__ = ${JSON.stringify(backendUrl)};</script>`
+        );
+      }
+      return new Response(html, {
+        headers: {
+          "Content-Type": "text/html;charset=utf-8",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
       });
-    },
-  },
+    }
 
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
-
-    // Echo console logs from the browser to the server
-    console: true,
+    return new Response("Frontend not built. Please run bun run build.ts", { status: 500 });
   },
 });
 
-console.log(`🚀 Server running at ${server.url}`);
+console.log(`🚀 Production server running at ${server.url}`);
