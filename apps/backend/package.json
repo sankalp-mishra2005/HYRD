@@ -39,6 +39,7 @@
   "scripts": {
     "build": "bun x prisma generate",
     "postinstall": "bun x prisma generate",
+    "db:push": "bun x prisma db push --schema=prisma/schema.prisma",
     "start": "bun run index.ts",
     "dev": "bun --hot index.ts",
     "test": "bun test"
