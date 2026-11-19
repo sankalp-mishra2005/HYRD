@@ -115,6 +115,11 @@ app.use(
 );
 app.use(express.json());
 
+// Healthcheck endpoint for cloud deployments (Railway/Docker)
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // Mount better-auth handlers
 app.use("/api/auth", toNodeHandler(auth));
 

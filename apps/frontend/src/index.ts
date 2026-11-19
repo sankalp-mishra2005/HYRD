@@ -12,6 +12,13 @@ const server = serve({
     const url = new URL(req.url);
     const pathname = decodeURIComponent(url.pathname);
 
+    // Healthcheck endpoint for Railway / load balancers
+    if (pathname === "/health") {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // Serve static files from dist if requested and exists
     if (pathname !== "/" && pathname !== "") {
       const candidatePath = path.join(distDir, pathname);
