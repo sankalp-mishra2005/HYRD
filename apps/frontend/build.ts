@@ -135,6 +135,8 @@ const result = await Bun.build({
   publicPath: (cliConfig as any).publicPath ?? "/",
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
+    "process.env.BACKEND_URL": JSON.stringify(process.env.BACKEND_URL || ""),
+    "process.env.VITE_BACKEND_URL": JSON.stringify(process.env.VITE_BACKEND_URL || ""),
   },
   ...cliConfig,
 });

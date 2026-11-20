@@ -8,16 +8,25 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 
-const elem = document.getElementById("root")!;
-const app = (
-  <App />
-);
+function mountApp() {
+  const elem = document.getElementById("root");
+  if (!elem) {
+    console.error("[HYRD] Root container #root not found in document.");
+    return;
+  }
 
-if (import.meta.hot) {
-  // With hot module reloading, `import.meta.hot.data` is persisted.
-  const root = (import.meta.hot.data.root ??= createRoot(elem));
-  root.render(app);
+  const app = <App />;
+
+  if (import.meta.hot) {
+    const root = (import.meta.hot.data.root ??= createRoot(elem));
+    root.render(app);
+  } else {
+    createRoot(elem).render(app);
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", mountApp);
 } else {
-  // The hot module reloading API is not available in production.
-  createRoot(elem).render(app);
+  mountApp();
 }

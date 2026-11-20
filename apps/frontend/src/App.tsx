@@ -22,7 +22,18 @@ function RootCheckpoint() {
   const { data: session, isPending } = authClient.useSession();
 
   useEffect(() => {
+    // Safety fallback: if session checking hangs for more than 1.5 seconds, fall back gracefully
+    const timer = setTimeout(() => {
+      const isGuest = localStorage.getItem("hyrd_guest_mode") === "true";
+      if (isGuest) {
+        navigate("/dashboard");
+      } else {
+        navigate("/login");
+      }
+    }, 1500);
+
     if (!isPending) {
+      clearTimeout(timer);
       const isGuest = localStorage.getItem("hyrd_guest_mode") === "true";
       if (isGuest) {
         navigate("/dashboard");
@@ -32,6 +43,8 @@ function RootCheckpoint() {
         navigate("/dashboard");
       }
     }
+
+    return () => clearTimeout(timer);
   }, [session, isPending, navigate]);
 
   return (
